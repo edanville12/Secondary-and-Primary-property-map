@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Busukuma Property Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>html,body,#map{height:100%;margin:0}body{font-family:Arial,sans-serif}#panel{position:absolute;z-index:1000;top:10px;left:10px;width:330px;background:#fff;border-radius:8px;box-shadow:0 2px 12px #0003;padding:12px}#panel h2{margin:0 0 8px;font-size:18px}#search{width:100%;box-sizing:border-box;padding:9px;border:1px solid #bbb;border-radius:5px}.row{margin-top:8px;font-size:13px}#status{font-size:12px;color:#555;margin-top:8px}#results{max-height:180px;overflow:auto;margin-top:6px}.result{padding:6px;border-top:1px solid #eee;cursor:pointer}.result:hover{background:#f2f2f2}</style></head>
+<body><div id="panel"><h2>Busukuma Property Map</h2><input id="search" placeholder="Search owner, phone, village or street">
+<div class="row"><label><input id="primaryToggle" type="checkbox" checked> Primary</label> <label><input id="secondaryToggle" type="checkbox" checked> Secondary</label></div>
+<div class="row">🔴 Primary &nbsp;&nbsp; 🟢 Secondary</div><div id="status">Loading property data…</div><div id="results"></div></div><div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+const map=L.map('map').setView([0.45,32.45],11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+let primary=[],secondary=[],pLayer,sLayer;
+const statusEl=document.getElementById('status'),resultsEl=document.getElementById('results');
+function esc(x){return String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function popup(r,type){return `<div style="min-width:220px"><h3 style="margin:0 0 8px">${esc(r.o||'Property')}</h3><table>
+<tr><td><b>Type</b></td><td>${type}</td></tr><tr><td><b>Phone</b></td><td>${esc(r.p)}</td></tr><tr><td><b>Division</b></td><td>${esc(r.d)}</td></tr><tr><td><b>Village</b></td><td>${esc(r.v)}</td></tr><tr><td><b>Street</b></td><td>${esc(r.s)}</td></tr><tr><td><b>Latitude</b></td><td>${r.lat}</td></tr><tr><td><b>Longitude</b></td><td>${r.lon}</td></tr></table></div>`;}
+function build(data,type,color){let layer=L.layerGroup();data.forEach(r=>{let m=L.circleMarker([r.lat,r.lon],{radius:type==='Primary'?4:3,color,weight:1,fillColor:color,fillOpacity:.8});m.bindPopup(popup(r,type));m._r=r;layer.addLayer(m);});return layer;}
+async function load(){[primary,secondary]=await Promise.all([fetch('primary.json').then(r=>r.json()),fetch('secondary.json').then(r=>r.json())]);pLayer=build(primary,'Primary','#e31a1c');sLayer=build(secondary,'Secondary','#16a34a');pLayer.addTo(map);sLayer.addTo(map);statusEl.textContent=`Loaded ${primary.length.toLocaleString()} Primary + ${secondary.length.toLocaleString()} Secondary properties.`;}
+document.getElementById('primaryToggle').onchange=e=>e.target.checked?pLayer.addTo(map):map.removeLayer(pLayer);
+document.getElementById('secondaryToggle').onchange=e=>e.target.checked?sLayer.addTo(map):map.removeLayer(sLayer);
+document.getElementById('search').oninput=()=>{let q=document.getElementById('search').value.trim().toLowerCase();resultsEl.innerHTML='';if(!q)return;let out=[];for(const [arr,type,layer] of [[primary,'Primary',pLayer],[secondary,'Secondary',sLayer]]){for(const r of arr){if((r.o+' '+r.p+' '+r.v+' '+r.s+' '+r.d).toLowerCase().includes(q)){out.push({r,type,layer});if(out.length>=30)break;}if(out.length>=30)break;}for(const x of out){let d=document.createElement('div');d.className='result';d.textContent=`${x.r.o||'Unnamed'} — ${x.type} — ${x.r.v||''}`;d.onclick=()=>{map.setView([x.r.lat,x.r.lon],17);x.layer.eachLayer(m=>{if(m._r===x.r)m.openPopup();});};resultsEl.appendChild(d);}};
+load().catch(e=>statusEl.textContent='Could not load property data: '+e);
+</script></body></html>
